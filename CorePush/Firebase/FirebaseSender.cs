@@ -120,6 +120,10 @@ public class FirebaseSender : IFirebaseSender
 
     private async Task<string> GetJwtTokenAsync()
     {
+        // Threading: Multiple threads can pass the freshness check simultaneously, resulting in multiple token requests.
+        // Different threads could end up writing results to firebaseToken and firebaseTokenExpiration.
+        // However, all results would be valid regardless of thread interleaving.
+        
         if (firebaseToken != null && firebaseTokenExpiration > DateTime.UtcNow)
         {
             return firebaseToken.AccessToken;

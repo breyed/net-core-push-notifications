@@ -29,7 +29,7 @@ class Program
 
     # endregion
 
-    private static readonly HttpClient http = new();
+    private static readonly SocketsHttpHandler httpHandler = new();
 
     static async Task Main()
     {
@@ -52,7 +52,7 @@ class Program
 
         while (true)
         {
-            var apn = new ApnSender(settings, http);
+            var apn = new ApnSender(settings, httpHandler);
             var payload = new AppleNotification(
                 Guid.NewGuid(), 
                 "Hello World (Message)",
@@ -67,7 +67,7 @@ class Program
         var serializer = new DefaultCorePushJsonSerializer();
         var settings = serializer.Deserialize<FirebaseSettings>(contents);
             
-        var fcm = new FirebaseSender(settings, http);
+        var fcm = new FirebaseSender(settings, httpHandler);
         var payload = new
         {
             message = new

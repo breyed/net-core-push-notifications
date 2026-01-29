@@ -23,7 +23,7 @@ namespace CorePush.Apple;
 /// <remarks>
 /// This type is thread safe.
 /// </remarks>
-public class ApnSender : IApnSender
+public class ApnSender : IApnSender, IDisposable
 {
     private static readonly ConcurrentDictionary<string, Tuple<string, DateTime>> tokens = new();
     private static readonly Dictionary<ApnServerType, string> servers = new()
@@ -39,8 +39,7 @@ public class ApnSender : IApnSender
     private readonly HttpClient http;
     private readonly IJsonSerializer serializer;
 
-    /// <param name="http">A <see cref="HttpClient"/> dedicated to this <see cref="ApnSender"/>. Do not use a shared <see cref="HttpClient"/> instance, since its instance-level state may be modified. However, its <see cref="HttpClientHandler" can be shared.</param>
-    public ApnSender(ApnSettings settings, HttpClient http) : this(settings, http, new DefaultCorePushJsonSerializer())
+    public ApnSender(ApnSettings settings, HttpMessageHandler httpHandler) : this(settings, httpHandler, new DefaultCorePushJsonSerializer())
     {
     }
         
@@ -48,12 +47,12 @@ public class ApnSender : IApnSender
     /// Apple push notification sender constructor
     /// </summary>
     /// <param name="settings">Apple Push Notification settings</param>
-    /// <param name="http">HTTP client instance</param>
+    /// <param name="httpHandler">A HTTP message handler instance, which can be shared by other services</param>
     /// <param name="serializer">JSON serializer</param>
-    public ApnSender(ApnSettings settings, HttpClient http, IJsonSerializer serializer)
+    public ApnSender(ApnSettings settings, HttpMessageHandler httpHandler, IJsonSerializer serializer)
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        this.http = http ?? throw new ArgumentNullException(nameof(http));
+        this.http = new(httpHandler ?? throw new ArgumentNullException(nameof(httpHandler)));
         this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             
         if (http.BaseAddress == null)
@@ -157,4 +156,25 @@ public class ApnSender : IApnSender
     }
 
     private static string Base64UrlEncode(byte[] bytes) => Convert.ToBase64String(bytes);
+
+    /// <summary>
+    /// Releases the unmanaged resources used by the <see cref="ApnSender"/> and optionally releases the managed resources.
+    /// </summary>
+    /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            http?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Releases the unmanaged resources used by the <see cref="ApnSender"/>.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
 }

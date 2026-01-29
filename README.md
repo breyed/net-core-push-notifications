@@ -11,7 +11,6 @@ CorePush is a simple lightweight library with minimal overhead. Send notificatio
 
 # Installation - NuGet
 
-Version 4.0.0+ requires .NET7.0. For earlier versions please use v3.1.1 of the library as it's targeting netstandard2.0, though please note, it uses legacy FCM send API. 
 The easiest way to get started with CorePush is to use [nuget](https://www.nuget.org/packages/CorePush) package.
 
 dotnet cli:
@@ -38,7 +37,8 @@ Sending messages is very simple so long as you know the format:
 
 ```csharp
 var firebaseSettingsJson = await File.ReadAllTextAsync('./link/to/my-project-123345-e12345.json');
-var fcm = new FirebaseSender(firebaseSettingsJson, httpClient);
+var httpHandler = new SocketsHttpHandler();
+var fcm = new FirebaseSender(firebaseSettingsJson, httpHandler);
 await fcm.SendAsync(payload);
 ```
 Useful links:
@@ -94,7 +94,9 @@ To send notifications to Apple devices you have to create a publisher profile an
 5. Server type - Development or Production APN server
 
 ```csharp
-var apn = new ApnSender(settings, httpClient);
+var settings = new ApnSettings { /* ... */ };
+var httpHandler = new SocketsHttpHandler();
+var apn = new ApnSender(settings, httpHandler);
 await apn.SendAsync(notification, deviceToken);
 ```
 Please see Apple notification payload examples here: https://developer.apple.com/library/content/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/CreatingtheNotificationPayload.html#//apple_ref/doc/uid/TP40008194-CH10-SW1.
@@ -128,6 +130,14 @@ System.Security.Cryptography.NCryptNative.ImportKey(SafeNCryptProviderHandle pro
 System.Security.Cryptography.CngKey.Import(Byte[] keyBlob, String curveName, CngKeyBlobFormat format, CngProvider provider)
 ```
 The solution is to add this in the Environment Variables of your service: `WEBSITE_LOAD_USER_PROFILE: 1`. More info on the issue can be found [here](https://stackoverflow.com/questions/66367406/cngkey-system-security-cryptography-cryptographicexception-the-system-cannot-fin) and [here](https://stackoverflow.com/questions/46114264/x509certificate2-on-azure-app-services-azure-websites-since-mid-2017).
+
+# Updates
+
+* Version 4.0.0+ requires .NET7.0. For earlier versions please use v3.1.1 of the library as it's targeting netstandard2.0, though please note, it uses legacy FCM send API. 
+
+* Version 5.0.0+ uses `HttpClientHandler` instead of `HttpClient`
+**API Change Note:** Starting from a recent version, `ApnSender` and `FirebaseSender` constructors now accept `HttpClientHandler` instead of `HttpClient`. This allows the handlers to be shared across services while each sender manages its own `HttpClient` instance. Both classes now implement `IDisposable` and should be properly disposed of when no longer needed.
+
 
 # MIT License
 

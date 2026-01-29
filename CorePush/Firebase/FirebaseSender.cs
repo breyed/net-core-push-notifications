@@ -22,7 +22,7 @@ namespace CorePush.Firebase;
 /// <remarks>
 /// This type is thread safe.
 /// </remarks>
-public class FirebaseSender : IFirebaseSender
+public class FirebaseSender : IFirebaseSender, IDisposable
 {
     private readonly HttpClient http;
     private readonly FirebaseSettings settings;
@@ -35,31 +35,21 @@ public class FirebaseSender : IFirebaseSender
     /// Initialize FirebaseSender
     /// </summary>
     /// <param name="serviceAccountFileJson">Service Account Key JSON file contents.
+    /// <param name="httpHandler">A HTTP message handler instance, which can be shared by other services</param>
     /// The file would have a name like: myproject-12345-abc123123.json</param>
-    /// <param name="http">HTTP client</param>
-    public FirebaseSender(string serviceAccountFileJson, HttpClient http): this(serviceAccountFileJson, http, new DefaultCorePushJsonSerializer())
+    public FirebaseSender(string serviceAccountFileJson, HttpMessageHandler httpHandler): this(serviceAccountFileJson, httpHandler, new DefaultCorePushJsonSerializer())
     {
     }
-        
+
     /// <summary>
     /// Initialize FirebaseSender
     /// </summary>
     /// <param name="serviceAccountFileJson">Service Account Key JSON file contents.
     /// The file would have a name like: myproject-12345-abc123123.json</param>
-    /// <param name="http">HTTP client</param>
+    /// <param name="httpHandler">A HTTP message handler instance, which can be shared by other services</param>
     /// <param name="serializer">Customized JSON serializer</param>
-    public FirebaseSender(string serviceAccountFileJson, HttpClient http, IJsonSerializer serializer) 
-        : this(serializer.Deserialize<FirebaseSettings>(serviceAccountFileJson), http, serializer)
-    {
-    }
-        
-    /// <summary>
-    /// Initialize FirebaseSender
-    /// </summary>
-    /// <param name="settings">Firebase Service Account Key JSON file settings. FirebaseSettings record can be used as a target of deserialization
-    /// of the Firebase SDK key file e.g. myproject-12345-abc123123.json</param>
-    /// <param name="http">HTTP client</param>
-    public FirebaseSender(FirebaseSettings settings, HttpClient http) : this(settings, http, new DefaultCorePushJsonSerializer())
+    public FirebaseSender(string serviceAccountFileJson, HttpMessageHandler httpHandler, IJsonSerializer serializer) 
+        : this(serializer.Deserialize<FirebaseSettings>(serviceAccountFileJson), httpHandler, serializer)
     {
     }
 
@@ -68,11 +58,21 @@ public class FirebaseSender : IFirebaseSender
     /// </summary>
     /// <param name="settings">Firebase Service Account Key JSON file settings. FirebaseSettings record can be used as a target of deserialization
     /// of the Firebase SDK key file e.g. myproject-12345-abc123123.json</param>
-    /// <param name="http">HTTP client</param>
-    /// <param name="serializer">Customized JSON serializer</param>
-    public FirebaseSender(FirebaseSettings settings, HttpClient http, IJsonSerializer serializer)
+    /// <param name="httpHandler">A HTTP message handler instance, which can be shared by other services</param>
+    public FirebaseSender(FirebaseSettings settings, HttpMessageHandler httpHandler) : this(settings, httpHandler, new DefaultCorePushJsonSerializer())
     {
-        this.http = http ?? throw new ArgumentNullException(nameof(http));
+    }
+
+    /// <summary>
+    /// Initialize FirebaseSender
+    /// </summary>
+    /// <param name="settings">Firebase Service Account Key JSON file settings. FirebaseSettings record can be used as a target of deserialization
+    /// of the Firebase SDK key file e.g. myproject-12345-abc123123.json</param>
+    /// <param name="httpHandler">A HTTP message handler instance, which can be shared by other services</param>
+    /// <param name="serializer">Customized JSON serializer</param>
+    public FirebaseSender(FirebaseSettings settings, HttpMessageHandler httpHandler, IJsonSerializer serializer)
+    {
+        this.http = new(httpHandler ?? throw new ArgumentNullException(nameof(httpHandler)));
         this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
@@ -120,6 +120,10 @@ public class FirebaseSender : IFirebaseSender
 
     private async Task<string> GetJwtTokenAsync()
     {
+        // Threading: Multiple threads can pass the freshness check simultaneously resulting in multiple token requests.
+        // Different threads could end up writing results to firebaseToken and firebaseTokenExpiration.
+        // However, all results would be valid regardless of thread interleaving.
+
         if (firebaseToken != null && firebaseTokenExpiration > DateTime.UtcNow)
         {
             return firebaseToken.AccessToken;
@@ -193,5 +197,26 @@ public class FirebaseSender : IFirebaseSender
             AsymmetricCipherKeyPair keyPair => keyPair.Private,
             _ => throw new InvalidOperationException("Invalid private key format.")
         };
+    }
+
+    /// <summary>
+    /// Releases the unmanaged resources used by the <see cref="FirebaseSender"/> and optionally releases the managed resources.
+    /// </summary>
+    /// <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            http?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Releases the unmanaged resources used by the <see cref="FirebaseSender"/>.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 }
